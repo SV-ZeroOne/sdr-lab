@@ -51,6 +51,29 @@ Companion files:
 | 5 | Mag-mount 40–860 MHz whip, ~30 cm, 3 m cable | relocation; electrically short on FM (-7 dB vs ANT500) |
 | 6 | Mag-mount LTE whip with coil, 700–2700 MHz, 3 m cable | **ADS-B, best 1090 MHz antenna owned (not yet tried)** |
 
+### Accessories: external LNA (owned, not yet used)
+**OpenSourceSDRLab 50 MHz–6 GHz low-noise amplifier**, 20 dB, micro-USB powered ([product page](https://opensourcesdrlab.com/products/50m-6ghz-low-noise-rf-amplifier-ultra-wideband-gain-20db-microusb-power-supply)).
+
+| Spec (from the listing) | Value |
+|---|---|
+| Range / gain | 50–6000 MHz, **20 dB** (no flatness curve published) |
+| Noise figure | not published ("small") |
+| Output P1dB | +20 to +21 dBm (listing contradicts itself) |
+| Max input | **not published**: treat as fragile, keep away from transmitters |
+| Power | **5 V micro-USB, 85 mA**, not bias-tee powered |
+| Connectors | SMA, 50 Ω, one SMA cable included. IN/OUT orientation not stated on the listing: **read the board silkscreen** |
+| Build | shielded enclosure, reverse-polarity protection diodes, 5 g |
+
+How to use it on this rig:
+- **Chain:** antenna → LNA **IN** … LNA **OUT** → (coax) → SDR. Put it **at the antenna end** of the 3 m mag-mount cable: an LNA's job is to overcome cable loss and the receiver's noise figure, so it must come *before* the loss.
+- **Where it should help:** the **HackRF** (its noise figure is ~10+ dB with its own amp off, so an external low-NF stage beats the built-in RF amp, which gave nothing on ADS-B) and **long or thin coax at UHF/1090 MHz**. It helps the RTL-SDR less: the R820T2 is already fairly quiet, so mainly the cable loss gets recovered.
+- **Where it will hurt:** **FM broadcast**. The signals are already strong (the RTL overloads above ~33 dB internal gain), and +20 dB in front guarantees overload. Because it's **wideband**, FM broadcast also passes through when tuned elsewhere (1090, 433…), so watch for a rising floor or ghost signals. If that happens, the cure is an **FM band-stop filter (88–108 MHz)** before the LNA.
+- **When it's in the chain:** HackRF **RF amp off** (`lnaExt=0`) and start the HackRF LNA ~16 dB lower than the recipes in this file (e.g. ADS-B LNA 24 instead of 40), then raise until the floor lifts a few dB. RTL: start ~10–15 dB lower gain.
+- **Bias-tee off** on the HackRF (`biasT=0`): it's USB-powered, and the NESDR Mini 2 has no bias-tee anyway.
+- **Never transmit through it.** It's one-way, and HackRF Tx into its output can destroy it (another reason the rig is Rx only).
+- **Power:** the PC's USB is fine (85 mA). If new evenly spaced spurs appear with it connected, try a USB power bank to rule out USB/ground noise.
+- **Best first experiment:** antenna #6 (sill) → LNA → 3 m cable → HackRF on ADS-B, A/B against the same without the LNA, judged by **aircraft count over 60 s** (baseline: HackRF + ANT500 ~5, RTL + whip 11–12).
+
 ### Live configuration at last check (16:47)
 **R0 RTL-SDR → FM broadcast listening** (tuned via API 2026-10-10 17:00): centre 100,000 kHz, **gain 25.4 dB**, AGC off, LO ppm 19, DC block on. BFM Δf +600,000 → **100.6 MHz (Classic FM)**, RF BW 200 kHz, AF BW 15 kHz, de-emph 50 µs, **stereo on**, RDS on, squelch -60, volume 4, unmuted. Pilot locked 100 % at -17.5 dB.
 Station survey at gain 29.7 (pwr / stereo pilot): 100.0 -15 / locked · **100.6 -16 / locked** · 99.8 -16 / unreliable lock · 100.5 -17 / none · 99.2 -25 · 100.9 -26 · 101.1 -27 (mono only). Gain sweep on 100.6: 22.9–29.7 all 100 % stereo lock, 25.4 best RDS; 33.8 starts losing lock (88 %) = overload onset.
@@ -162,7 +185,7 @@ Recall values for the other HackRF setups:
 ## 3. Open items (priority order)
 1. **Night RDS test**: leave the HackRF/RTL on 100.6 FM after dark and poll Dem %. If it jumps → daytime noise source to hunt; if not → reflections, needs an outdoor/loft antenna.
 2. **Callsign ↔ voice matching with Hermes**: RTL-SDR on ADS-B, HackRF on airband; when a callsign is heard on 120.400, ask Hermes to find it in the ADS-B report (altitude, speed, position).
-3. **Antenna #6 on ADS-B** (sill, no foil): compare aircraft count against the RTL's 11–12 and the HackRF/ANT500's ~5.
+3. **Antenna #6 on ADS-B** (sill, no foil): compare aircraft count against the RTL's 11–12 and the HackRF/ANT500's ~5. Then add the **external 20 dB LNA** at the antenna end (HackRF amp off, LNA 24) and repeat the 60 s count (see *Accessories*).
 4. **Vision**: relaunch llama-server with `--mmproj …\mmproj-BF16.gguf` (drop `--no-mmproj`), set `supports_vision: true` for `qwen38` in Hermes. Then waterfall screenshots become askable.
 5. **Prove/disprove HackRF noise** on the RTL: RTL on 100.6 FM, stop the HackRF (`DELETE /deviceset/<hackrf>/device/run`), watch RTL Dem %.
 6. **Measure HackRF ppm** against a known carrier; enter as LO ppm (`LOppmTenths`).
